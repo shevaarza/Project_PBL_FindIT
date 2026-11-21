@@ -60,7 +60,10 @@ export async function deleteItemPhoto(path: string | null | undefined): Promise<
 
 export async function readItemPhoto(path: string): Promise<Buffer | null> {
   const { data, error } = await supabase().storage.from(env.itemBucket).download(path);
-  if (error || !data) return null;
+  if (error || !data) {
+    console.error('[FindIT] Storage download failed for ' + path + ' (bucket ' + env.itemBucket + '): ' + (error ? (error.message || JSON.stringify(error)) : 'no data'));
+    return null;
+  }
   return Buffer.from(await data.arrayBuffer());
 }
 
