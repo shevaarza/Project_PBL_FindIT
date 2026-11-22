@@ -38,7 +38,7 @@ export const User = {
 
   async findById(userId: number, d: Db = db) {
     const row = await d.one(
-      `SELECT id_user, email_kampus, name_user, id_nim, password_user FROM public."User" WHERE id_user = $1 AND role_user = 'student' LIMIT 1`, [userId]);
+      `SELECT id_user, email_kampus, name_user, id_nim, password_user, email_verified_at FROM public."User" WHERE id_user = $1 AND role_user = 'student' LIMIT 1`, [userId]);
     return row ? Crypto.decryptRow(row) : null;
   },
 
