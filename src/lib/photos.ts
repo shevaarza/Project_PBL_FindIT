@@ -55,7 +55,10 @@ export async function storeItemPhoto(data: Buffer): Promise<string> {
 
 export async function deleteItemPhoto(path: string | null | undefined): Promise<void> {
   if (!path) return;
-  try { await supabase().storage.from(env.itemBucket).remove([path]); } catch (e) { console.error('[FindIT] Could not delete photo: ' + (e as Error).message); }
+  try {
+    const { error } = await supabase().storage.from(env.itemBucket).remove([path]);
+    if (error) console.error('[FindIT] Could not delete photo ' + path + ': ' + (error.message || JSON.stringify(error)));
+  } catch (e) { console.error('[FindIT] Could not delete photo: ' + (e as Error).message); }
 }
 
 export async function readItemPhoto(path: string): Promise<Buffer | null> {
