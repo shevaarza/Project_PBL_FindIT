@@ -5,6 +5,7 @@ import { env } from '@/lib/env';
 import { PublicNav } from '@/components/Nav';
 import { Alert, Footer, PageHeader } from '@/components/ui';
 import CameraCapture from '@/components/CameraCapture';
+import { isVerified } from '@/lib/verification';
 
 export const metadata = { title: 'Report found item | FindIT' };
 
@@ -27,6 +28,8 @@ export default async function ReportItemPage({ searchParams }: { searchParams: P
     nama_barang: f.nama_barang ?? '', id_kategori: f.id_kategori ?? '', detail_lokasi: f.detail_lokasi ?? '',
     tanggal_ditemukan: f.tanggal_ditemukan ?? todayYmd(), ciri_umum: f.ciri_umum ?? '', ciri_khusus: f.ciri_khusus ?? '',
   };
+  let verified = true;
+  try { verified = await isVerified(user.id); } catch (e) { console.error('[FindIT] Failed to check verification: ' + (e as Error).message); }
   const successMessage = sp.created === '1' ? 'Your found item report has been submitted successfully.' : '';
   const token = await csrfToken();
 
@@ -44,6 +47,15 @@ export default async function ReportItemPage({ searchParams }: { searchParams: P
             {errorMessage !== '' ? <Alert type="danger" message={errorMessage} /> : null}
             {successMessage !== '' ? <Alert type="success" message={successMessage} autoHide /> : null}
 
+            {!verified ? (
+              <>
+                <Alert type="warning" message="Your account is not yet verified. Please verify your campus email in your profile before you report a found item." />
+                <div className="d-flex flex-wrap gap-2">
+                  <a href="/profile#verify" className="btn btn-primary">Verify my account</a>
+                  <a href="/" className="btn btn-outline-secondary">Back to found items</a>
+                </div>
+              </>
+            ) : (
             <form method="POST" action="/api/report-item" className="fi-form-card needs-validation" encType="multipart/form-data" noValidate>
               <input type="hidden" name="csrf_token" value={token} />
 
@@ -110,6 +122,7 @@ export default async function ReportItemPage({ searchParams }: { searchParams: P
                 <a href="/" className="btn btn-outline-secondary">Cancel</a>
               </div>
             </form>
+            )}
           </div>
         </div>
       </main>
