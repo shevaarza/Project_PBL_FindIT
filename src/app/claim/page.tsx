@@ -4,6 +4,7 @@ import { csrfToken, requireRole } from '@/lib/session';
 import { getFlash } from '@/lib/flash';
 import { fiDate, fiOr } from '@/lib/format';
 import { intParam } from '@/lib/student-text';
+import { isVerified } from '@/lib/verification';
 import { PublicNav } from '@/components/Nav';
 import { Alert, Badge, Footer, PageHeader } from '@/components/ui';
 
@@ -49,6 +50,9 @@ export default async function ClaimPage({ searchParams }: { searchParams: Promis
       previousClaimStatus = r ? String(r.status_klaim) : null;
     } catch (e) { console.error('[FindIT] Failed to check previous claim: ' + (e as Error).message); }
   }
+
+  let verified = true;
+  try { verified = await isVerified(user.id); } catch (e) { console.error('[FindIT] Failed to check verification: ' + (e as Error).message); }
 
   const token = await csrfToken();
 
@@ -103,6 +107,14 @@ export default async function ClaimPage({ searchParams }: { searchParams: Promis
               <>
                 <Alert type="warning" message="This item is not currently available for claims." />
                 <a href="/" className="btn btn-outline-secondary">Browse other items</a>
+              </>
+            ) : !verified ? (
+              <>
+                <Alert type="warning" message="Your account is not yet verified. Please verify your campus email in your profile before you claim an item." />
+                <div className="d-flex flex-wrap gap-2">
+                  <a href="/profile#verify" className="btn btn-primary">Verify my account</a>
+                  <a href={`/item-detail?id=${itemId}`} className="btn btn-outline-secondary">Back to item</a>
+                </div>
               </>
             ) : (
               <form method="POST" action={`/api/claim?id=${itemId}`} className="fi-form-card needs-validation" noValidate>
