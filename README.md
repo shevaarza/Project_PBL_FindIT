@@ -109,3 +109,10 @@ Still planned (as in the PHP README): rate limiting for login/reset, per-level a
 * Server components render the pages; they use plain links on purpose so `public/assets/js/app.js` runs on every page view like before.
 * Put every schema change in a new numbered file in `supabase/migrations/`.
 * Never commit `.env*`. Run `npm run typecheck` and `npm test` before pushing.
+
+## Update: verified accounts, photo crop, automatic photo cleanup
+
+1. **Run `supabase/migrations/002_email_verification.sql`** once in Supabase > SQL Editor (safe to run again). It adds `User.email_verified_at` and the `email_verifications` table.
+2. **Verified accounts.** A student starts as "Not yet verified". On the profile page, "Send verification email" mails a link (valid 60 minutes) to the registered campus mailbox; opening it marks the account Verified. Reporting a found item and claiming an item both require a verified account (pages and APIs). It uses the same `MAIL_*` settings and `APP_URL` as the password reset.
+3. **Photo crop.** Every picture (upload or camera) opens a crop dialog in the 4:3 frame the item cards use. Drag, zoom, "Fit whole photo" (nothing is cut) or "Fill frame". The result is a 1280x960 JPEG, usually well under 1 MB, which also keeps uploads under Vercel's 4.5 MB request limit.
+4. **Storage cleanup.** When an admin approves a claim the item becomes Claimed, `photo_path` is cleared and the file is deleted from the `item-photos` bucket. The daily cron (`/api/cron/backup`) also removes photos of returned items and files that no item points to.
