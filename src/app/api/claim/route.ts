@@ -6,6 +6,7 @@ import { csrfOk, readForm, redirectTo, str } from '@/lib/http';
 import { setFlash } from '@/lib/flash';
 import { createNotification } from '@/lib/notify';
 import { intParam } from '@/lib/student-text';
+import { VERIFY_REQUIRED_MESSAGE, isVerified } from '@/lib/verification';
 
 class ClaimError extends Error {}
 const len = (s: string) => [...s].length;
@@ -39,6 +40,12 @@ export async function POST(req: Request) {
 
   if (Number(item.id_user_pelapor ?? 0) === user.id) return fail('You cannot claim an item that you reported yourself.');
   if (!(await csrfOk(req, fd))) return fail('Your form session has expired. Please refresh the page and try again.');
+  try {
+    if (!(await isVerified(user.id))) return fail(VERIFY_REQUIRED_MESSAGE);
+  } catch (e) {
+    console.error('[FindIT] Failed to check verification: ' + (e as Error).message);
+    return fail('We could not submit your claim right now. Please try again.');
+  }
   if (!form.lokasi_kehilangan || !form.terakhir_di_lihat || !form.ciri_khusus_claim) return fail('Please complete all fields before submitting your claim.');
   if (len(form.lokasi_kehilangan) > 5000 || len(form.terakhir_di_lihat) > 5000 || len(form.ciri_khusus_claim) > 5000) {
     return fail('Each answer must be no longer than 5,000 characters.');
