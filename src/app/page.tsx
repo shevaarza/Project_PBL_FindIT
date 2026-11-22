@@ -1,154 +1,73 @@
 import { db } from '@/lib/db';
+import { requireRole } from '@/lib/session';
 import { Crypto } from '@/lib/crypto';
-import { currentUser } from '@/lib/session';
 import { fiDate, fiOr } from '@/lib/format';
-import { itemPhotoUrl } from '@/lib/photos';
-import { numberFormat } from '@/lib/student-text';
-import { PublicNav } from '@/components/Nav';
-import { EmptyState, Footer } from '@/components/ui';
+import { AdminNav } from '@/components/Nav';
+import { Alert, Badge, EmptyState, Footer, PageHeader } from '@/components/ui';
 
-export const metadata = { title: 'FindIT - Lost and Found' };
+export const metadata = { title: 'User Management | FindIT Admin' };
+const PER_PAGE = 20;
 
-export default async function HomePage() {
-  let items: Record<string, any>[] = [];
+// Admin only. READ-ONLY: no edit or delete, and the password hash is never selected.
+export default async function UsersPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  await requireRole('admin');
+  const sp = await searchParams;
+  let page = Math.max(1, parseInt(String(sp.page ?? '1'), 10) || 1);
+  let users: Record<string, any>[] = [];
+  let total = 0, pages = 1, error = '';
   try {
-    items = Crypto.decryptRows(await db.rows(
-      `SELECT i.kode_laporan, i.nama_barang, i.detail_lokasi, i.tanggal_ditemukan, i.photo_path, c.name_category
-       FROM public.item AS i
-       INNER JOIN public.category AS c ON i.id_kategori = c.id_category
-       WHERE i.status_barang = $1
-       ORDER BY i.tanggal_ditemukan DESC`, ['Found']));
-  } catch (e) {
-    console.error('[FindIT] Failed to retrieve items: ' + (e as Error).message);
-    return <>Sorry, the item catalog is currently unavailable.</>;
-  }
-
-  const user = await currentUser();
-  const names = new Set<string>();
-  for (const r of items) { const n = String(r.name_category ?? '').trim(); if (n) names.add(n); }
-  const categoryNames = [...names].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
-  const total = items.length;
-  const isStudent = user?.role === 'student';
+    total = Number(await db.value('SELECT COUNT(*) FROM public."User"') ?? 0);
+    pages = Math.max(1, Math.ceil(total / PER_PAGE));
+    page = Math.min(page, pages);
+    users = Crypto.decryptRows(await db.rows(
+      `SELECT id_user, name_user, id_nim, email_kampus, role_user, created_at, email_verified_at FROM public."User" ORDER BY id_user ASC LIMIT ${PER_PAGE} OFFSET ${(page - 1) * PER_PAGE}`));
+  } catch (e) { console.error('[FindIT] User Management error: ' + (e as Error).message); error = 'Unable to load users. Please try again later.'; pages = 1; }
 
   return (
     <>
-      <PublicNav user={user} active="home" />
+      <AdminNav active="users" />
       <main className="fi-main" id="main">
         <div className="fi-container">
-          <header className="fi-hero">
-            <div className="fi-hero-text">
-              <p className="fi-eyebrow">Campus lost &amp; found / FindIT</p>
-              <h1 className="fi-title">Lost something?<br /><span>FindIT.</span></h1>
-              <p className="fi-lead">
-                Find your lost belongings and help others find theirs.<br />
-                Browse the items found around campus below.
-              </p>
-              <div className="fi-hero-actions">
-                {isStudent ? (
-                  <>
-                    <a href="/report-item" className="btn btn-primary">+ Report found item</a>
-                    <a href="/my-claims" className="btn btn-outline-secondary">My claims</a>
-                  </>
-                ) : user?.role === 'admin' ? (
-                  <a href="/admin" className="btn btn-primary">Open admin dashboard</a>
-                ) : (
-                  <>
-                    <a href="/register" className="btn btn-primary">Create an account</a>
-                    <a href="/login" className="btn btn-outline-secondary">Sign in</a>
-                  </>
-                )}
-              </div>
-            </div>
-            <div className="fi-count" role="group" aria-label="Items waiting for their owners">
-              <span className="fi-count-number">{numberFormat(total)}</span>
-              <span className="fi-count-label">Items waiting</span>
-            </div>
-          </header>
-
-          <section aria-labelledby="found-items-heading">
-            <div className="fi-section-head">
-              <div>
-                <p className="fi-eyebrow mb-1">The inventory</p>
-                <h2 id="found-items-heading">Found items</h2>
-              </div>
-              {total > 0 ? (
-                <span className="small" aria-live="polite">
-                  Showing <strong id="home-visible-count">{total}</strong> of {numberFormat(total)} item(s)
-                </span>
-              ) : null}
-            </div>
-
-            {total === 0 ? (
-              <div className="fi-empty-boxed">
-                <EmptyState title="No found items yet" text="Found item reports will appear here as soon as they are available."
-                  action={isStudent ? <a href="/report-item" className="btn btn-primary">Report a found item</a> : undefined} />
-              </div>
+          <PageHeader eyebrow="Campus lost & found / Users" titleHtml="User<br><span>management.</span>" lead="A read-only list of registered accounts."
+            count={total.toLocaleString('en-US')} countLabel="Registered users" />
+          <section aria-labelledby="users-heading">
+            <div className="fi-section-head"><div><p className="fi-eyebrow mb-1">Accounts</p><h2 id="users-heading">Users</h2></div></div>
+            {error !== '' ? <Alert type="danger" message={error} /> : total === 0 ? (
+              <div className="fi-empty-boxed"><EmptyState title="No users yet" text="Registered accounts will appear here." /></div>
             ) : (
               <>
-                <div className="fi-toolbar fi-toolbar--standalone">
-                  <div className="fi-toolbar-field">
-                    <label htmlFor="home-search">Search items</label>
-                    <input type="search" className="form-control" id="home-search" placeholder="Item name, category, or location..." autoComplete="off" />
-                  </div>
-                  <div className="fi-toolbar-field">
-                    <label htmlFor="home-category">Category</label>
-                    <select className="form-select" id="home-category">
-                      <option value="">All categories</option>
-                      {categoryNames.map((n) => <option key={n} value={n}>{n}</option>)}
-                    </select>
-                  </div>
-                  <div className="fi-toolbar-field d-flex align-items-end">
-                    <button type="button" className="btn btn-outline-secondary w-100" id="home-reset">Reset filters</button>
-                  </div>
-                </div>
-
-                <div className="fi-item-grid">
-                  {items.map((item) => {
-                    const searchText = [item.nama_barang ?? '', item.name_category ?? '', item.detail_lokasi ?? ''].join(' ').toLowerCase();
-                    const id = Number(item.kode_laporan);
-                    return (
-                      <article key={id} className="fi-item-card" data-item-card data-search={searchText} data-category={item.name_category ?? ''}>
-                        <div className="fi-item-card-image">
-                          {item.photo_path ? (
-                            <img src={itemPhotoUrl(id)} alt={String(item.nama_barang ?? '')} loading="lazy" />
-                          ) : (
-                            <div className="fi-item-card-placeholder"><span>FindIT</span><small>No photo available</small></div>
-                          )}
-                        </div>
-                        <div className="fi-item-card-content">
-                          <div className="fi-item-card-top">
-                            <span className="fi-chip">{fiOr(item.name_category ?? '', 'Uncategorized')}</span>
-                            <span className="fi-item-card-id">#{id}</span>
-                          </div>
-                          <h3 className="fi-item-card-title">{item.nama_barang}</h3>
-                          <div className="fi-item-card-meta">
-                            <div className="fi-field">
-                              <span className="fi-field-label">Location</span>
-                              <p className="fi-field-value">{fiOr(item.detail_lokasi ?? '', 'Not specified')}</p>
-                            </div>
-                            <div className="fi-field">
-                              <span className="fi-field-label">Date found</span>
-                              <p className="fi-field-value">{fiDate(item.tanggal_ditemukan ?? '')}</p>
-                            </div>
-                          </div>
-                          <div className="fi-item-card-footer">
-                            <a className="btn btn-outline-secondary w-100" href={`/item-detail?id=${id}`}>View details</a>
-                          </div>
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-
-                <div id="home-no-results" className="fi-empty-boxed mt-3" hidden>
-                  <EmptyState title="No matching items" text="Try a different search term or choose another category." mark="?" />
-                </div>
+                <div className="fi-table-panel"><div className="fi-table-wrap">
+                  <table className="table fi-table">
+                    <thead><tr><th scope="col">ID</th><th scope="col">Name</th><th scope="col">NIM</th><th scope="col">Email</th><th scope="col">Status</th><th scope="col">Registered</th></tr></thead>
+                    <tbody>
+                      {users.map((u) => (
+                        <tr key={u.id_user}>
+                          <td data-label="ID"><span className="fi-code">#{Number(u.id_user)}</span></td>
+                          <td data-label="Name"><span className="fi-cell-name">{String(u.name_user ?? '')}</span></td>
+                          <td data-label="NIM">{fiOr(u.id_nim, '–')}</td>
+                          <td data-label="Email">{String(u.email_kampus ?? '')}</td>
+                          <td data-label="Status"><Badge status={u.role_user} fallback="Unknown" />{String(u.role_user) === 'student' ? <> <span className={`fi-badge ${u.email_verified_at ? 'fi-badge--success' : 'fi-badge--warning'}`}>{u.email_verified_at ? 'Verified' : 'Not yet verified'}</span></> : null}</td>
+                          <td data-label="Registered">{fiDate(u.created_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div></div>
+                {pages > 1 ? (
+                  <nav className="fi-results-bar" aria-label="Pagination">
+                    <p>Page <strong>{page}</strong> of {pages}</p>
+                    <div className="d-flex gap-2">
+                      {page > 1 ? <a className="btn btn-sm btn-outline-secondary" href={`?page=${page - 1}`}>Previous</a> : null}
+                      {page < pages ? <a className="btn btn-sm btn-outline-secondary" href={`?page=${page + 1}`}>Next</a> : null}
+                    </div>
+                  </nav>
+                ) : null}
               </>
             )}
           </section>
         </div>
       </main>
-      <Footer />
+      <Footer note="Admin workspace" />
     </>
   );
 }
