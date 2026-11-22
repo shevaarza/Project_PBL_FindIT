@@ -23,6 +23,7 @@ export default async function LoginPage() {
           </div>
 
           {errorMessage !== '' ? <Alert type="danger" message={errorMessage} /> : null}
+          {flash.success ? <Alert type="success" message={flash.success} /> : null}
 
           <form method="POST" action="/api/login" className="needs-validation" noValidate>
             <input type="hidden" name="csrf_token" value={token} />
