@@ -5,6 +5,7 @@ import { setFlash } from '@/lib/flash';
 import { removeAvatar, savePhoto, setPreset } from '@/lib/avatar';
 import { hashPassword, verifyPassword } from '@/lib/auth';
 import { User } from '@/lib/models';
+import { sendVerificationLink } from '@/lib/verification';
 import { timingSafeEqual } from 'node:crypto';
 
 export async function POST(req: Request) {
@@ -14,7 +15,7 @@ export async function POST(req: Request) {
 
   const fd = await readForm(req);
   const action = str(fd, 'action');
-  const section = action === 'change_password' ? 'password' : 'photo';
+  const section = action === 'change_password' ? 'password' : action === 'send_verification' ? 'verify' : 'photo';
   // The page reads { section } from the flash form and shows the message in that card.
   const back = async (type: 'success' | 'danger', message: string) => {
     await setFlash({ ...(type === 'success' ? { success: message } : { error: message }), form: { section } });
@@ -25,6 +26,10 @@ export async function POST(req: Request) {
 
   try {
     switch (action) {
+      case 'send_verification': {
+        const r = await sendVerificationLink(user.id);
+        return back(r.ok ? 'success' : 'danger', r.message);
+      }
       case 'upload_photo': {
         const error = await savePhoto(db, user.id, fd.get('photo'));
         return error === null ? back('success', 'Your profile photo has been updated.') : back('danger', error);
