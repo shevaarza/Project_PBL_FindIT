@@ -30,6 +30,8 @@ export default async function ProfilePage() {
   const csrf = await csrfToken();
   const photoFlash = flashFor('photo');
   const passFlash = flashFor('password');
+  const verifyFlash = flashFor('verify');
+  const verified = !!account?.email_verified_at;
 
   return (
     <>
@@ -51,9 +53,29 @@ export default async function ProfilePage() {
                     <p className="fi-profile-sub">Student &middot; ID {account.id_nim}</p>
                     <div className="fi-profile-badges">
                       <span className="fi-badge fi-badge--info">Student account</span>
-                      <span className="fi-badge fi-badge--success">Verified</span>
+                      {verified
+                        ? <span className="fi-badge fi-badge--success">Verified</span>
+                        : <span className="fi-badge fi-badge--warning">Not yet verified</span>}
                     </div>
                   </div>
+                </section>
+
+                <section className="fi-profile-card" aria-labelledby="verifyTitle" id="verify">
+                  <h2 className="fi-profile-h" id="verifyTitle">Account verification</h2>
+                  {verifyFlash ? <Alert type={verifyFlash.type} message={verifyFlash.message} autoHide={verifyFlash.type === 'success'} /> : null}
+                  {verified ? (
+                    <p className="mb-0">Your campus email <strong>{account.email_kampus}</strong> is verified. You can report found items and claim items.</p>
+                  ) : (
+                    <>
+                      <p>Your account is <strong>not yet verified</strong>. Verify your campus email to report found items or claim items. We will send a link to <strong>{account.email_kampus}</strong>.</p>
+                      <form method="post" action="/api/profile" className="needs-validation" noValidate>
+                        <input type="hidden" name="csrf_token" value={csrf} />
+                        <input type="hidden" name="action" value="send_verification" />
+                        <button type="submit" className="btn btn-primary btn-sm" data-loading-text="Sending...">Send verification email</button>
+                      </form>
+                      <p className="form-text mb-0 mt-2">The link is valid for 60 minutes. Check your spam folder if you do not see it.</p>
+                    </>
+                  )}
                 </section>
 
                 <section className="fi-profile-card" aria-labelledby="overviewTitle">
