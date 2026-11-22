@@ -1,11 +1,14 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import PhotoCropper from './PhotoCropper';
 
 /**
  * "Item photo" field. Same markup as the PHP report form (file input + preview box that app.js drives),
  * plus a "Take photo" button that opens the device camera. The captured picture is put into the same
  * <input type="file"> and a "change" event is fired, so app.js's validation/preview and the normal form
  * submit work unchanged. Without camera access (or on a phone) it falls back to the native camera picker.
+ * Every chosen or captured picture first goes through the crop dialog (PhotoCropper), so the student decides the framing
+ * and nothing is cut off by surprise. The cropped JPEG is what ends up in the file input.
  */
 export default function CameraCapture({ id = 'item_photo', name = 'item_photo', label = 'Item photo', help }: {
   id?: string; name?: string; label?: string; help?: string;
@@ -17,6 +20,8 @@ export default function CameraCapture({ id = 'item_photo', name = 'item_photo', 
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
   const [facing, setFacing] = useState<'environment' | 'user'>('environment');
+  const [pending, setPending] = useState<File | null>(null);
+  const skipCrop = useRef(false);
 
   const stop = () => { streamRef.current?.getTracks().forEach((t) => t.stop()); streamRef.current = null; };
   useEffect(() => stop, []);
@@ -36,6 +41,24 @@ export default function CameraCapture({ id = 'item_photo', name = 'item_photo', 
     }
   }
 
+  /** Put a file into the form's file input and tell app.js (preview/validation) about it. */
+  function commit(file: File | null) {
+    const input = inputRef.current;
+    if (!input) return;
+    skipCrop.current = true;
+    try {
+      if (file) {
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        input.files = dt.files;
+      } else {
+        input.value = '';
+      }
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    } finally { skipCrop.current = false; }
+  }
+
+  /** Camera / native-picker photos go into the input first, then the change handler below opens the crop dialog. */
   function give(file: File) {
     const input = inputRef.current;
     if (!input) return;
@@ -44,6 +67,21 @@ export default function CameraCapture({ id = 'item_photo', name = 'item_photo', 
     input.files = dt.files;
     input.dispatchEvent(new Event('change', { bubbles: true }));
   }
+
+  // Runs before app.js's own "change" listener (capture phase) and holds the picture back until it is cropped.
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    const onChange = (e: Event) => {
+      if (skipCrop.current) return;
+      const f = input.files?.[0];
+      if (!f) return;
+      e.stopImmediatePropagation();
+      setPending(f);
+    };
+    input.addEventListener('change', onChange, true);
+    return () => input.removeEventListener('change', onChange, true);
+  }, []);
 
   function capture() {
     const v = videoRef.current;
@@ -70,7 +108,7 @@ export default function CameraCapture({ id = 'item_photo', name = 'item_photo', 
         <input ref={nativeRef} type="file" accept="image/*" capture="environment" hidden
           onChange={(e) => { const f = e.target.files?.[0]; if (f) give(f); e.target.value = ''; }} />
       </div>
-      <div className="form-text">{help ?? 'Upload or take a clear photo of the found item. JPG, PNG, or WEBP. Maximum size: 5 MB.'}</div>
+      <div className="form-text">{help ?? 'Upload or take a clear photo of the found item. JPG, PNG, or WEBP. You can crop it before it is sent.'}</div>
       <div className="invalid-feedback">Please select a valid image file.</div>
       {error ? <div className="text-danger small mt-2" role="alert">{error}</div> : null}
       {open ? (
@@ -83,6 +121,12 @@ export default function CameraCapture({ id = 'item_photo', name = 'item_photo', 
             <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => { stop(); setOpen(false); }}>Cancel</button>
           </div>
         </div>
+      ) : null}
+      {pending ? (
+        <PhotoCropper file={pending}
+          onDone={(cropped) => { setPending(null); commit(cropped); }}
+          onCancel={() => { setPending(null); commit(null); }}
+          onUnreadable={() => { const f = pending; setPending(null); if (f) commit(f); }} />
       ) : null}
       <div id="photo-preview-container" className="mt-3 d-none">
         <img id="photo-preview" alt="Selected item photo preview" className="img-fluid rounded" style={{ maxHeight: '240px', objectFit: 'contain' }} />
