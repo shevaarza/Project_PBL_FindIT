@@ -5,6 +5,7 @@ import { csrfOk, readForm, redirectTo, str } from '@/lib/http';
 import { setFlash } from '@/lib/flash';
 import { PhotoError, deleteItemPhoto, processItemPhotoUpload, storeItemPhoto } from '@/lib/photos';
 import { env } from '@/lib/env';
+import { VERIFY_REQUIRED_MESSAGE, isVerified } from '@/lib/verification';
 
 const len = (s: string) => [...s].length;
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: env.timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -22,6 +23,13 @@ export async function POST(req: Request) {
   const fail = async (error: string) => { await setFlash({ error, form }); return redirectTo(req, '/report-item'); };
 
   if (!(await csrfOk(req, fd))) return fail('Your form session has expired. Please refresh the page and try again.');
+
+  try {
+    if (!(await isVerified(user.id))) return fail(VERIFY_REQUIRED_MESSAGE);
+  } catch (e) {
+    console.error('Student Report Item error: ' + (e as Error).message);
+    return fail('Unable to submit your item report. Please try again later.');
+  }
 
   const categoryId = /^[+-]?\d+$/.test(form.id_kategori) ? parseInt(form.id_kategori, 10) : 0;
   const d = form.tanggal_ditemukan;
