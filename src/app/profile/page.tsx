@@ -6,6 +6,7 @@ import { User } from '@/lib/models';
 import { numberFormat } from '@/lib/student-text';
 import { PublicNav } from '@/components/Nav';
 import { Alert, Avatar, Footer } from '@/components/ui';
+import CropInput from '@/components/CropInput';
 
 export const metadata = { title: 'My profile | FindIT' };
 
@@ -106,8 +107,8 @@ export default async function ProfilePage() {
                     <div className="fi-profile-preview" data-photo-preview aria-hidden="true"><Avatar info={info} size={72} /></div>
                     <div className="fi-profile-upload-body">
                       <label htmlFor="photo-file" className="form-label">Add a photo</label>
-                      <input type="file" className="form-control" id="photo-file" name="photo" accept="image/jpeg,image/png,image/webp" data-photo-input required />
-                      <div className="form-text">JPG, PNG or WebP, up to 2 MB. It is cropped to a square.</div>
+                      <CropInput id="photo-file" name="photo" className="form-control" accept="image/jpeg,image/png,image/webp" required />
+                      <div className="form-text">JPG, PNG or WebP. You can move and zoom it to choose the square that is used.</div>
                       <div className="invalid-feedback">Please choose a photo.</div>
                       <button type="submit" className="btn btn-primary btn-sm mt-3" data-loading-text="Uploading...">Upload photo</button>
                     </div>
