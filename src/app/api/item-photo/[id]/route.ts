@@ -1,7 +1,7 @@
 import { db } from '@/lib/db';
 import { readItemPhoto } from '@/lib/photos';
 
-// Public: item photos are shown on the home page. The bucket itself stays private; only this route reads it.
+// Public: item photos are shown on the home page. Photos are stored in the database; only this route reads them.
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const itemId = /^\d+$/.test(id) ? parseInt(id, 10) : 0;

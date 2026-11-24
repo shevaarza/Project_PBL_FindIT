@@ -39,7 +39,12 @@ export async function GET(req: Request) {
     const v = await db.value(`SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'User' AND column_name = 'email_verified_at'`);
     return v !== null ? 'applied' : 'MISSING: run 002_email_verification.sql in the Supabase SQL Editor';
   });
+  await step('migration_003', async () => {
+    const v = await db.value(`SELECT to_regclass('public.item_photo')::text`);
+    return v ? 'applied' : 'MISSING: run 003_item_photo_table.sql in the Supabase SQL Editor (item photos cannot be saved without it)';
+  });
   await step('storage', async () => {
+    if (!env.supabaseUrl || !env.serviceKey) return 'not configured (optional: only needed for the daily backup files)';
     const { data, error } = await supabase().storage.listBuckets();
     if (error) throw new Error(error.message || JSON.stringify(error));
     const names = (data ?? []).map((b) => b.name);

@@ -2,6 +2,7 @@ import sharp, { type Metadata } from 'sharp';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
 import { env } from './env';
+import { db } from './db';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -45,23 +46,35 @@ export async function processItemPhotoUpload(file: FormDataEntryValue | null): P
   }
 }
 
-/** Upload to the private item-photos bucket. Returns the storage path to keep in item.photo_path. */
+const DB_PREFIX = 'db:';
+const isDbPath = (p: string) => p.startsWith(DB_PREFIX);
+
+/** Save the photo in public.item_photo. Returns the value to keep in item.photo_path ('db:<uuid>'). */
 export async function storeItemPhoto(data: Buffer): Promise<string> {
-  const path = `items/${new Date().toISOString().slice(0, 7)}/${randomUUID()}.jpg`;
-  const { error } = await supabase().storage.from(env.itemBucket).upload(path, data, { contentType: 'image/jpeg', upsert: false });
-  if (error) throw new Error('Photo upload failed: ' + error.message);
+  const path = DB_PREFIX + randomUUID();
+  try {
+    await db.query('INSERT INTO public.item_photo (photo_path, mime, data) VALUES ($1, $2, $3)', [path, 'image/jpeg', data]);
+  } catch (e) {
+    throw new Error('Photo upload failed: ' + (e as Error).message);
+  }
   return path;
 }
 
 export async function deleteItemPhoto(path: string | null | undefined): Promise<void> {
   if (!path) return;
   try {
+    if (isDbPath(path)) { await db.query('DELETE FROM public.item_photo WHERE photo_path = $1', [path]); return; }
+    // Legacy photo kept in Storage.
     const { error } = await supabase().storage.from(env.itemBucket).remove([path]);
     if (error) console.error('[FindIT] Could not delete photo ' + path + ': ' + (error.message || JSON.stringify(error)));
   } catch (e) { console.error('[FindIT] Could not delete photo: ' + (e as Error).message); }
 }
 
 export async function readItemPhoto(path: string): Promise<Buffer | null> {
+  if (isDbPath(path)) {
+    const row = await db.one<{ data: Buffer }>('SELECT data FROM public.item_photo WHERE photo_path = $1', [path]);
+    return row ? Buffer.from(row.data) : null;
+  }
   const { data, error } = await supabase().storage.from(env.itemBucket).download(path);
   if (error || !data) {
     console.error('[FindIT] Storage download failed for ' + path + ' (bucket ' + env.itemBucket + '): ' + (error ? (error.message || JSON.stringify(error)) : 'no data'));

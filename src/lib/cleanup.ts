@@ -22,6 +22,18 @@ export async function purgeClosedItemPhotos(): Promise<number> {
 }
 
 export async function purgeOrphanPhotos(minAgeMinutes = 60): Promise<number> {
+  // Photos in the database that no item points to (a failed insert, a replaced photo, a delete that failed).
+  const r = await db.query(
+    `DELETE FROM public.item_photo p
+      WHERE p.created_at < now() - ($1::int * interval '1 minute')
+        AND NOT EXISTS (SELECT 1 FROM public.item i WHERE i.photo_path = p.photo_path)`, [minAgeMinutes]);
+  let removed = r.rowCount;
+  // Leftover files in the old Storage bucket (only if the bucket is reachable).
+  try { removed += await purgeOrphanStorageFiles(minAgeMinutes); } catch { /* bucket missing or not configured: nothing to clean */ }
+  return removed;
+}
+
+async function purgeOrphanStorageFiles(minAgeMinutes: number): Promise<number> {
   const bucket = supabase().storage.from(env.itemBucket);
   const known = new Set((await db.rows<{ photo_path: string }>('SELECT photo_path FROM public.item WHERE photo_path IS NOT NULL')).map((r) => r.photo_path));
   const cutoff = Date.now() - minAgeMinutes * 60_000;
