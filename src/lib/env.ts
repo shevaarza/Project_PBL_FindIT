@@ -1,8 +1,9 @@
 // Central place for environment variables. Values come from .env.local (dev) or the Vercel dashboard.
 export const env = {
   get databaseUrl() { return process.env.DATABASE_URL ?? ''; },
-  get supabaseUrl() { return process.env.SUPABASE_URL ?? ''; },
-  get serviceKey() { return process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''; },
+  /** FINDIT_SUPABASE_URL / FINDIT_SUPABASE_KEY win over SUPABASE_*: the Vercel-Supabase integration locks the SUPABASE_* variables to its own project. */
+  get supabaseUrl() { return process.env.FINDIT_SUPABASE_URL || process.env.SUPABASE_URL || ''; },
+  get serviceKey() { return process.env.FINDIT_SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || ''; },
   get itemBucket() { return process.env.ITEM_PHOTO_BUCKET || 'item-photos'; },
   get backupBucket() { return process.env.BACKUP_BUCKET || 'findit-backups'; },
   get appEncKey() { return (process.env.APP_ENC_KEY ?? '').trim(); },
