@@ -1,13 +1,18 @@
 'use client';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-/** The item cards show photos in a 4:3 frame, so the cropper uses the same frame: what you see here is what the card shows. */
-const RATIO = 3 / 4;
-const OUT_W = 1280;
-const OUT_H = Math.round(OUT_W * RATIO);
-
 interface Props {
   file: File;
+  /** Frame height / width. Default 3/4: the item cards show photos in a 4:3 frame, so what you see here is what the card shows. */
+  ratio?: number;
+  /** Width in pixels of the finished JPEG (height follows the ratio). */
+  outWidth?: number;
+  /** Show a circle over the frame (profile photos are displayed round). The saved picture stays square. */
+  round?: boolean;
+  title?: string;
+  hint?: string;
+  /** Limit the frame width, useful for square frames so the dialog fits on short screens. */
+  frameMaxWidth?: number;
   onDone: (cropped: File) => void;
   onCancel: () => void;
   /** The browser could not read this image (for example HEIC). The original is passed on so the server can answer. */
@@ -18,7 +23,10 @@ interface Props {
  * Crop dialog: drag to move, slider / mouse wheel / pinch to zoom. "Fit whole photo" shrinks the picture until all of it
  * is visible (white bars fill the rest), so nothing is cut off. The result is a ready-to-upload 1280x960 JPEG.
  */
-export default function PhotoCropper({ file, onDone, onCancel, onUnreadable }: Props) {
+export default function PhotoCropper({ file, onDone, onCancel, onUnreadable, ratio = 3 / 4, outWidth = 1280, round = false, title = 'Crop photo', hint = 'Drag to move and use the slider to zoom. The frame shows exactly how the photo appears on the item card.', frameMaxWidth }: Props) {
+  const RATIO = ratio;
+  const OUT_W = outWidth;
+  const OUT_H = Math.round(OUT_W * RATIO);
   const frameRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const [url, setUrl] = useState('');
@@ -36,9 +44,19 @@ export default function PhotoCropper({ file, onDone, onCancel, onUnreadable }: P
   const pinch = useRef<number | null>(null);
 
   useEffect(() => {
-    const u = URL.createObjectURL(file);
+    // Never let an unreadable value take the page down: hand it back so the original behaviour (no crop) continues.
+    let u = '';
+    try {
+      if (!(file instanceof Blob)) throw new Error('not a file');
+      u = URL.createObjectURL(file);
+    } catch (e) {
+      console.error('[FindIT] Crop dialog could not read the picture: ' + (e as Error).message);
+      onUnreadable();
+      return;
+    }
     setUrl(u);
     return () => URL.revokeObjectURL(u);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file]);
 
   useLayoutEffect(() => {
@@ -158,14 +176,15 @@ export default function PhotoCropper({ file, onDone, onCancel, onUnreadable }: P
   const range = nat && fw ? scales(fw, fh, nat.w, nat.h) : null;
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="Crop photo"
+    <div role="dialog" aria-modal="true" aria-label={title}
       style={{ position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(20,24,18,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px' }}>
       <div style={{ background: '#fff', borderRadius: 16, padding: 16, width: 'min(560px, 100%)', maxHeight: '96vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,.35)' }}>
-        <h2 className="h5 mb-1">Crop photo</h2>
-        <p className="small text-muted mb-3">Drag to move and use the slider to zoom. The frame shows exactly how the photo appears on the item card.</p>
+        <h2 className="h5 mb-1">{title}</h2>
+        <p className="small text-muted mb-3">{hint}</p>
 
+        <div style={{ maxWidth: frameMaxWidth, margin: '0 auto' }}>
         <div ref={frameRef} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
-          style={{ position: 'relative', width: '100%', height: fw ? fh : undefined, aspectRatio: '4 / 3', overflow: 'hidden', background: '#fff', border: '1px solid #d9d4c3', borderRadius: 12, touchAction: 'none', cursor: 'grab', userSelect: 'none' }}>
+          style={{ position: 'relative', width: '100%', height: fw ? fh : undefined, aspectRatio: `1 / ${RATIO}`, overflow: 'hidden', background: '#fff', border: '1px solid #d9d4c3', borderRadius: 12, touchAction: 'none', cursor: 'grab', userSelect: 'none' }}>
           {url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img ref={imgRef} src={url} alt="Photo to crop" draggable={false}
@@ -173,6 +192,10 @@ export default function PhotoCropper({ file, onDone, onCancel, onUnreadable }: P
               onError={onUnreadable}
               style={{ position: 'absolute', left: pos.x, top: pos.y, width: nat ? nat.w * scale : 'auto', height: nat ? nat.h * scale : 'auto', maxWidth: 'none', pointerEvents: 'none', visibility: nat ? 'visible' : 'hidden' }} />
           ) : null}
+          {round ? (
+            <div aria-hidden="true" style={{ position: 'absolute', inset: 0, margin: 'auto', width: '100%', aspectRatio: '1 / 1', maxHeight: '100%', borderRadius: '50%', boxShadow: '0 0 0 9999px rgba(255,255,255,.7)', border: '2px solid #fff', outline: '1px solid rgba(0,0,0,.25)', pointerEvents: 'none' }} />
+          ) : null}
+        </div>
         </div>
 
         {range ? (

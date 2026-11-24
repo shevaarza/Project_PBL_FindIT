@@ -29,7 +29,7 @@ export default function CropInput({ id, name, className, accept, required }: { i
     const onChange = (e: Event) => {
       if (skip.current) return;
       const f = input.files?.[0];
-      if (!f) return;
+      if (!(f instanceof File)) return;
       e.stopImmediatePropagation();
       setPending(f);
     };
@@ -45,7 +45,7 @@ export default function CropInput({ id, name, className, accept, required }: { i
           title="Adjust profile photo" hint="Drag to move and use the slider to zoom. The circle shows how your photo appears as your avatar."
           onDone={(cropped) => { setPending(null); commit(cropped); }}
           onCancel={() => { setPending(null); commit(null); }}
-          onUnreadable={() => { const f = pending; setPending(null); if (f) commit(f); }} />
+          onUnreadable={() => { const f = pending; setPending(null); commit(f instanceof File ? f : null); }} />
       ) : null}
     </>
   );
